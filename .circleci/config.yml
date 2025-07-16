@@ -29,7 +29,7 @@ jobs:
           name: ✅ Validate required environment variables
           shell: /bin/bash
           command: |
-            REQUIRED_VARS=("GCP_SA_KEY_B64" "GCP_PROJECT_ID" "GCP_VM_NAME" "GCP_VM_USER" "GCP_ZONE")
+            REQUIRED_VARS=("GCP_SA_KEY_B64" "PROJECT_ID" "VM_NAME	" "VM_USERNAME" "VM_ZONE")
             for i in "${REQUIRED_VARS[@]}"; do
               if [[ -z "${!i}" ]]; then
                 echo "❌ ERROR: Missing environment variable $i"
@@ -42,10 +42,10 @@ jobs:
       - run:
           name: 🧪 Debug - Print environment variable values
           command: |
-            echo "GCP_PROJECT_ID=$GCP_PROJECT_ID"
-            echo "GCP_VM_NAME=$GCP_VM_NAME"
-            echo "GCP_VM_USER=$GCP_VM_USER"
-            echo "GCP_ZONE=$GCP_ZONE"
+            echo "PROJECT_ID=$PROJECT_ID"
+            echo "VM_NAME=$VM_NAME"
+            echo "VM_USERNAME=$VM_USERNAME"
+            echo "VM_ZONE=$VM_ZONE"
             echo "GCP_SA_KEY_B64 length=$(echo $GCP_SA_KEY_B64 | wc -c)"
 
       - run:
@@ -53,7 +53,7 @@ jobs:
           command: |
             echo "$GCP_SA_KEY_B64" | base64 -d > gcloud-key.json
             gcloud auth activate-service-account --key-file=gcloud-key.json
-            gcloud config set project "$GCP_PROJECT_ID"
+            gcloud config set project "$PROJECT_ID"
 
       - run:
           name: 🛠 Install dependencies (zip, unzip, ssh)
@@ -64,13 +64,13 @@ jobs:
           name: 🔑 Generate SSH key pair non-interactively
           command: |
             mkdir -p ~/.ssh
-            ssh-keygen -t rsa -f ~/.ssh/google_compute_engine -C $GCP_VM_USER -q -N ""
+            ssh-keygen -t rsa -f ~/.ssh/google_compute_engine -C $VM_USERNAME -q -N ""
 
       - run:
           name: 🌐 Get external IP of GCP VM
           command: |
-            export VM_IP=$(gcloud compute instances describe "$GCP_VM_NAME" \
-              --zone="$GCP_ZONE" \
+            export VM_IP=$(gcloud compute instances describe "$VM_NAME" \
+              --zone="$VM_ZONE" \
               --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
             echo "export GCP_VM_IP=$VM_IP" >> $BASH_ENV
 
@@ -79,13 +79,13 @@ jobs:
           command: |
             source $BASH_ENV
             zip -r app.zip . -x ".git/*"
-            gcloud compute scp app.zip $GCP_VM_USER@$GCP_VM_NAME:~ --zone=$GCP_ZONE
+            gcloud compute scp app.zip $VM_USERNAME@$VM_NAME:~ --zone=$VM_ZONE
 
       - run:
           name: 🚀 Deploy and Run Flask App on GCP VM
           command: |
-            gcloud compute ssh $GCP_VM_USER@$GCP_VM_NAME \
-              --zone=$GCP_ZONE \
+            gcloud compute ssh $VM_USERNAME@$VM_NAME \
+              --zone=$VM_ZONE \
               --command='
                 sudo apt-get update &&
                 sudo apt-get install -y unzip python3-venv &&
