@@ -23,13 +23,15 @@ jobs:
   deploy:
     executor: custom-gcloud
     steps:
+      - setup_remote_docker
+
       - checkout
 
       - run:
           name: ✅ Validate required environment variables
           shell: /bin/bash
           command: |
-            REQUIRED_VARS=("GCP_SA_KEY_B64" "PROJECT_ID" "VM_NAME" "VM_USERNAME" "VM_ZONE")
+            REQUIRED_VARS=("GCP_SA_KEY_B64" "GCP_PROJECT_ID" "GCP_REGION" "CLOUD_RUN_SERVICE")
             for i in "${REQUIRED_VARS[@]}"; do
               if [[ -z "${!i}" ]]; then
                 echo "❌ ERROR: Missing environment variable $i"
@@ -40,65 +42,35 @@ jobs:
             done
 
       - run:
-          name: 🧪 Debug - Print environment variable values
-          command: |
-            echo "PROJECT_ID=$PROJECT_ID"
-            echo "VM_NAME=$VM_NAME"
-            echo "VM_USERNAME=$VM_USERNAME"
-            echo "VM_ZONE=$VM_ZONE"
-            echo "GCP_SA_KEY_B64 length=$(echo $GCP_SA_KEY_B64 | wc -c)"
-
-      - run:
           name: 🔐 Authenticate with GCP
           command: |
             echo "$GCP_SA_KEY_B64" | base64 -d > gcloud-key.json
             gcloud auth activate-service-account --key-file=gcloud-key.json
-            gcloud config set project "$PROJECT_ID"
+            gcloud config set project "$GCP_PROJECT_ID"
 
       - run:
-          name: 🛠 Install dependencies (zip, unzip, ssh)
+          name: ⚙️ Configure Docker for gcloud
           command: |
-            apt-get update && apt-get install -y zip unzip openssh-client
+            gcloud auth configure-docker
 
       - run:
-          name: 🔑 Generate SSH key pair non-interactively
+          name: 🐳 Build Docker image
           command: |
-            mkdir -p ~/.ssh
-            ssh-keygen -t rsa -f ~/.ssh/google_compute_engine -C $VM_USERNAME -q -N ""
+            docker build -t gcr.io/$GCP_PROJECT_ID/$CLOUD_RUN_SERVICE .
 
       - run:
-          name: 🌐 Get external IP of GCP VM
+          name: 🚀 Push Docker image to GCR
           command: |
-            export VM_IP=$(gcloud compute instances describe "$VM_NAME" \
-              --zone="$VM_ZONE" \
-              --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
-            echo "export GCP_VM_IP=$VM_IP" >> $BASH_ENV
+            docker push gcr.io/$GCP_PROJECT_ID/$CLOUD_RUN_SERVICE
 
       - run:
-          name: 📦 Zip and Transfer Flask App to VM
+          name: ☁️ Deploy to Cloud Run
           command: |
-            source $BASH_ENV
-            zip -r app.zip . -x ".git/*"
-            gcloud compute scp app.zip $VM_USERNAME@$VM_NAME:~ --zone=$VM_ZONE
-
-      - run:
-          name: 🚀 Deploy and Run Flask App on GCP VM
-          command: |
-            gcloud compute ssh $VM_USERNAME@$VM_NAME \
-              --zone=$VM_ZONE \
-              --command='
-                sudo apt-get update &&
-                sudo apt-get install -y unzip python3-venv &&
-                mkdir -p ~/flask-app &&
-                unzip -o ~/app.zip -d ~/flask-app &&
-                cd ~/flask-app &&
-                python3 -m venv venv &&
-                source venv/bin/activate &&
-                pip install --upgrade pip &&
-                pip install flask &&
-                pkill -f app.py || true &&
-                nohup venv/bin/python app.py &
-              '
+            gcloud run deploy $CLOUD_RUN_SERVICE \
+              --image gcr.io/$GCP_PROJECT_ID/$CLOUD_RUN_SERVICE \
+              --platform managed \
+              --region $GCP_REGION \
+              --allow-unauthenticated
 
 workflows:
   version: 2
@@ -108,4 +80,3 @@ workflows:
       - deploy:
           requires:
             - test
-          
