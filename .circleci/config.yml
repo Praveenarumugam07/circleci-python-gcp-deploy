@@ -1,41 +1,78 @@
-deploy:
-  docker:
-    - image: cimg/python:3.10
-  steps:
-    - checkout
+version: 2.1
 
-    - run:
-        name: Install Google Cloud SDK
-        command: |
-          curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-440.0.0-linux-x86_64.tar.gz
-          tar -xf google-cloud-sdk-*.tar.gz
-          ./google-cloud-sdk/install.sh --quiet
+jobs:
+  build:
+    docker:
+      - image: cimg/python:3.10  # Official CircleCI Python image
+    steps:
+      - checkout
 
-    - run:
-        name: Authenticate with GCP
-        command: |
-          echo $GCLOUD_SERVICE_KEY > ${HOME}/gcloud-service-key.json
-          ./google-cloud-sdk/bin/gcloud auth activate-service-account --key-file=${HOME}/gcloud-service-key.json
-          ./google-cloud-sdk/bin/gcloud config set project $PROJECT_ID
+      - run:
+          name: Set up Python virtual environment
+          command: |
+            python -m venv venv
+            . venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
 
-    - run:
-        name: Set up SSH key for gcloud
-        command: |
-          mkdir -p ~/.ssh
-          echo "$GCP_SSH_PRIVATE_KEY" > ~/.ssh/google_compute_engine
-          chmod 600 ~/.ssh/google_compute_engine
+      - run:
+          name: Run tests (optional)
+          command: |
+            echo "No tests configured for this simple app"
 
-    - run:
-        name: Deploy to VM
-        command: |
-          ./google-cloud-sdk/bin/gcloud compute ssh $VM_USERNAME@$VM_NAME --zone=$VM_ZONE --command="
-            cd ~
-            mkdir -p circleci_app
-            cd circleci_app
-            echo '${CIRCLE_SHA1}' > deployed_commit.txt
-            sudo apt update
-            sudo apt install -y python3-pip
-            pip3 install flask
-            echo \"from flask import Flask; app=Flask(__name__); @app.route('/')\ndef hello(): return 'Deployed via CircleCI'; app.run(host='0.0.0.0', port=5000)\" > app.py
-            nohup python3 app.py &
-          "
+  deploy:
+    docker:
+      - image: cimg/python:3.10
+    steps:
+      - checkout
+
+      - run:
+          name: Install Google Cloud SDK
+          command: |
+            curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-440.0.0-linux-x86_64.tar.gz
+            tar -xf google-cloud-sdk-*.tar.gz
+            ./google-cloud-sdk/install.sh --quiet
+
+      - run:
+          name: Authenticate with GCP
+          command: |
+            echo $GCLOUD_SERVICE_KEY > ${HOME}/gcloud-service-key.json
+            ./google-cloud-sdk/bin/gcloud auth activate-service-account --key-file=${HOME}/gcloud-service-key.json
+            ./google-cloud-sdk/bin/gcloud config set project $PROJECT_ID
+
+      - run:
+          name: Set up SSH private key for gcloud
+          command: |
+            mkdir -p ~/.ssh
+            echo "$GCP_SSH_PRIVATE_KEY" > ~/.ssh/google_compute_engine
+            chmod 600 ~/.ssh/google_compute_engine
+
+      - run:
+          name: Deploy application to VM
+          command: |
+            ./google-cloud-sdk/bin/gcloud compute ssh $VM_USERNAME@$VM_NAME --zone=$VM_ZONE --command="
+              # Commands run on VM
+              cd ~
+              mkdir -p circleci_app
+              cd circleci_app
+              echo '${CIRCLE_SHA1}' > deployed_commit.txt
+              # Install dependencies if not installed
+              sudo apt update
+              sudo apt install -y python3-pip
+              pip3 install flask
+              # Create or overwrite app.py with simple Flask app
+              echo \"from flask import Flask; app=Flask(__name__); @app.route('/')\ndef hello(): return 'Deployed via CircleCI'; app.run(host='0.0.0.0', port=5000)\" > app.py
+              # Kill previous running Flask app if any (optional)
+              pkill -f app.py || true
+              # Run the app in background
+              nohup python3 app.py &
+            "
+
+workflows:
+  version: 2
+  build_and_deploy:
+    jobs:
+      - build
+      - deploy:
+          requires:
+            - build
