@@ -41,10 +41,10 @@ jobs:
             ./google-cloud-sdk/bin/gcloud config set project $PROJECT_ID
 
       - run:
-          name: Decode and set up SSH private and public keys
+          name: Set up SSH private and public keys for gcloud
           command: |
             mkdir -p ~/.ssh
-            echo "$GCP_SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/google_compute_engine
+            echo "$GCP_SSH_PRIVATE_KEY" > ~/.ssh/google_compute_engine
             chmod 600 ~/.ssh/google_compute_engine
             echo "$GCP_SSH_PUBLIC_KEY" > ~/.ssh/google_compute_engine.pub
             chmod 644 ~/.ssh/google_compute_engine.pub
