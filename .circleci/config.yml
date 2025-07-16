@@ -29,7 +29,7 @@ jobs:
           name: ✅ Validate required environment variables
           shell: /bin/bash
           command: |
-            REQUIRED_VARS=("GCP_SA_KEY_B64" "PROJECT_ID" "VM_NAME	" "VM_USERNAME" "VM_ZONE")
+            REQUIRED_VARS=("GCP_SA_KEY_B64" "PROJECT_ID" "VM_NAME" "VM_USERNAME" "VM_ZONE")
             for i in "${REQUIRED_VARS[@]}"; do
               if [[ -z "${!i}" ]]; then
                 echo "❌ ERROR: Missing environment variable $i"
