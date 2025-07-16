@@ -41,13 +41,7 @@ jobs:
             ./google-cloud-sdk/bin/gcloud config set project $PROJECT_ID
 
       - run:
-          name: Generate SSH key pair non-interactively
-          command: |
-            mkdir -p ~/.ssh
-            ssh-keygen -t rsa -f ~/.ssh/google_compute_engine -C $VM_USERNAME -N ""
-
-      - run:
-          name: Deploy application to VM using gcloud and venv
+          name: Deploy application to VM using gcloud ephemeral SSH key
           command: |
             ./google-cloud-sdk/bin/gcloud compute ssh $VM_USERNAME@$VM_NAME --zone=$VM_ZONE --command="
               cd ~
