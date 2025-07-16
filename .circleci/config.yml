@@ -34,23 +34,14 @@ jobs:
             ./google-cloud-sdk/install.sh --quiet
 
       - run:
-          name: Authenticate with GCP
+          name: Decode and authenticate with GCP using Service Account Key
           command: |
-            echo "$GCLOUD_SERVICE_KEY" > ${HOME}/gcloud-service-key.json
+            echo "$GCLOUD_SERVICE_KEY_B64" | base64 -d > ${HOME}/gcloud-service-key.json
             ./google-cloud-sdk/bin/gcloud auth activate-service-account --key-file=${HOME}/gcloud-service-key.json
             ./google-cloud-sdk/bin/gcloud config set project $PROJECT_ID
 
       - run:
-          name: Decode and set up SSH private and public keys
-          command: |
-            mkdir -p ~/.ssh
-            echo "$GCP_SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/google_compute_engine
-            chmod 600 ~/.ssh/google_compute_engine
-            echo "$GCP_SSH_PUBLIC_KEY" > ~/.ssh/google_compute_engine.pub
-            chmod 644 ~/.ssh/google_compute_engine.pub
-
-      - run:
-          name: Deploy application to VM using virtual environment (PEP 668 fix)
+          name: Deploy application to VM using gcloud ephemeral SSH key
           command: |
             ./google-cloud-sdk/bin/gcloud compute ssh $VM_USERNAME@$VM_NAME --zone=$VM_ZONE --command="
               cd ~
